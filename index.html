@@ -482,14 +482,18 @@ infoP.mesh.position.set(-0.60, 1.45, -0.80); infoP.mesh.rotation.y = 0.55;
 const BTN = [['mode', 'Mod değiştir'], ['act', 'Oynat'], ['reset', 'Sıfırla'], ['undo', 'Geri al'], ['home', 'Modeli yerine koy']];
 const buttons = BTN.map(([id, label], i) => {
   const b = makePanel(0.105, 0.045, 420, 180); b.id = id; b.label = label;
-  b.mesh.position.set(-0.60 + (i - 2) * 0.112 * Math.cos(0.55), 1.255, -0.80 + (i - 2) * 0.112 * Math.sin(0.55));
-  b.mesh.rotation.y = 0.55; b.mesh.userData.btn = id; return b;
+  // lay the buttons along the info panel's own x-axis (cos, 0, -sin) and a hair in front of it
+  const th = 0.55, dx = (i - 2) * 0.112;
+  b.mesh.position.set(-0.60 + dx * Math.cos(th) + 0.004 * Math.sin(th), 1.255, -0.80 - dx * Math.sin(th) + 0.004 * Math.cos(th));
+  b.mesh.rotation.y = th; b.mesh.userData.btn = id; return b;
 });
 function drawButton(b, text, on) {
   const { ctx, cv } = b; ctx.clearRect(0, 0, cv.width, cv.height);
   ctx.fillStyle = on ? '#aab1ff' : '#152020'; ctx.strokeStyle = '#3d5551'; ctx.lineWidth = 6;
   ctx.beginPath(); ctx.roundRect(4, 4, cv.width - 8, cv.height - 8, 28); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = on ? '#0e1514' : '#e4eeec'; ctx.font = '600 50px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = on ? '#0e1514' : '#e4eeec'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  let fs = 50; ctx.font = '600 ' + fs + 'px system-ui, sans-serif';
+  while (ctx.measureText(text).width > cv.width - 48 && fs > 26) { fs -= 2; ctx.font = '600 ' + fs + 'px system-ui, sans-serif'; }
   ctx.fillText(text, cv.width / 2, cv.height / 2 + 2); b.tex.needsUpdate = true;
 }
 function wrapText(ctx, text, x, y, w, lh) {
