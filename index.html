@@ -34,11 +34,12 @@
 <div id="ui">
   <h1>Crosscap VR</h1>
   <p id="modeHelp"></p>
-  <p style="font-size:12.5px;opacity:.8"><i>N</i> ikinci crosscap (içindeki çarpı): yüzey tek delikli Klein şişesi, kaydırma da <i>Y</i>-homeomorfizması. Yay <i>N</i>'nin içine hiç girmediği için onu bir disk gibi önünde itiyor.</p>
+  <p id="nNote" style="font-size:12.5px;opacity:.8"></p>
   <div class="row" role="group" aria-label="Mod">
     <button id="mDrag" type="button">Elle kaydır</button>
     <button id="mPlay" type="button">Animasyon</button>
     <button id="mDraw" type="button">Çiz</button>
+    <button id="mSix" type="button">6 renk</button>
   </div>
   <div id="state" aria-live="polite"></div>
   <div class="row">
@@ -50,6 +51,7 @@
   <div class="row">
     <button id="bSurf" type="button">Yüzey: Sudanlı</button>
     <button id="bPano" type="button">Panoyu yaklaştır</button>
+    <button id="bLang" type="button">English</button>
   </div>
   <div id="vrslot"></div>
 </div>
@@ -302,6 +304,69 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 
+// ---------------------------------------------------------------- language: ?lang=en|tr, else the browser's language
+const LANG = (() => { const q = new URLSearchParams(location.search).get('lang'); if (q === 'en' || q === 'tr') return q; return (navigator.language || '').toLowerCase().startsWith('tr') ? 'tr' : 'en'; })();
+const LT = {
+  tr: {
+    note: "<i>N</i> ikinci crosscap (içindeki çarpı): yüzey tek delikli Klein şişesi, kaydırma da <i>Y</i>-homeomorfizması. Yay <i>N</i>'nin içine hiç girmediği için onu bir disk gibi önünde itiyor.",
+    mDrag: 'Elle kaydır', mPlay: 'Animasyon', mDraw: 'Çiz', mSix: '6 renk', play: 'Oynat', pause: 'Duraklat', reset: 'Sıfırla', undoLong: 'Son çizgiyi sil',
+    surfSud: 'Yüzey: Sudanlı', surfMob: 'Yüzey: sıradan Möbius', surfMobShort: 'Yüzey: sıradan', panoNear: 'Panoyu yaklaştır', panoBack: 'Panoyu yerine koy',
+    panoGet: 'Panoyu getir', panoPut: 'Panoyu geri koy', langBtn: 'English', colour: 'Renk ',
+    hint: "Fare: sürükle = döndür · tekerlek = yakınlaştır · N'yi tutup çek", iframe: 'VR için bu dosyayı Quest tarayıcısında doğrudan, https adresinden aç.',
+    bMode: 'Mod değiştir', bUndo: 'Geri al', bHome: 'Modeli yerine koy',
+    caps: ['Kenardan kenara giden a yayı ve ikinci crosscap N (içindeki çarpı). Kıvrık bölge ⊗ crosscap\'i, koyu halka onun çekirdeği. Yüzey: tek delikli Klein şişesi.',
+      'α, N\'nin izleyeceği yol: ⊗\'nin çekirdeğini bir kez geçiyor. Y, N crosscap\'ini α boyunca kaydırır.',
+      'N çekirdeği geçip kıvrımın içinden dolaşıyor ve a\'yı önünde sürüklüyor.',
+      'Yay, N\'den ve kendisinden geçmeden gerdiriliyor (izotopi).',
+      'Y(a): yay artık çekirdeği iki kez kesiyor.',
+      'Y\'yi bir kez daha uyguluyoruz: N çekirdeğin etrafında ikinci turunu atıyor.',
+      'Yay yeniden gerdiriliyor.',
+      'Sarı köprü çekirdeği iki kez kesiyor; öbür yana itilince iki kesişim birbirini götürüyor.',
+      'Artık yay çekirdeği hiç kesmiyor.',
+      'Y², kenara paralel ∂ eğrisi etrafındaki Dehn kıvrımıdır: Y² = t∂.'],
+    modeName: { drag: 'Elle kaydır', play: 'Animasyon', draw: 'Çiz', six: '6 renk' },
+    help: { drag: "N'yi tetikle ya da parmaklarını kıstırarak tut, yüzeyde gezdir. Çekirdeğin etrafında bir tur at ve evine getir: kordonun sınıfı aşağıda yazar.",
+      play: 'Hesaplanmış animasyon. A ya da X: oynat / duraklat. Sağ kol sağa-sola: ileri-geri sar.',
+      draw: 'Tetiği basılı tutup yüzeye ya da panodaki diske / şeride çiz: çizgi üç yerde birden belirir. Rengi alttaki yuvarlak düğmelerden seç.',
+      six: 'Möbius şeridinde altı ülke: her biri öbür beşinin hepsine değiyor. Düzlemde her haritaya 4 renk yeter, Möbius şeridinde 6 renk gerekebilir (Tietze, 1910). Bir ülkeye dokun: sınırını izle.' },
+    sixTitle: '6 ülke', sixSel: 'Seçili ülkenin sınırı beyaz: öbür beş ülkenin her birine değiyor. Başka bir ülkeye dokun ya da aynısına dokunup kapat.',
+    waitHome: 'N evine (sağdaki düz bölge) dönünce kordonun sınıfı burada yazacak.', other: 'başka bir sınıf · ',
+    lines: n => n + ' çizgi', empty: 'boş',
+    footer: 'B / Y: mod · kavrama: modeli tut ve çevir (panoya bakarken: panoyu taşı) · sağ kol yukarı-aşağı: büyüt / küçült',
+    diskTitle: 'Disk + iki crosscap (⊗, N)', diskTitleSix: 'Disk + crosscap: 6 ülke', stripTitle: 'Açılmış şerit (uçlar ters yapışık)', coreLabel: 'çekirdek = ⊗ çemberi'
+  },
+  en: {
+    note: "<i>N</i> is the second crosscap (the X inside it): the surface is the one-holed Klein bottle and the slide is the <i>Y</i>-homeomorphism. The arc never enters <i>N</i>, so it pushes <i>N</i> along like a disk.",
+    mDrag: 'Slide by hand', mPlay: 'Animation', mDraw: 'Draw', mSix: '6 colours', play: 'Play', pause: 'Pause', reset: 'Reset', undoLong: 'Undo last line',
+    surfSud: 'Surface: Sudanese', surfMob: 'Surface: ordinary Möbius', surfMobShort: 'Surface: ordinary', panoNear: 'Bring panel closer', panoBack: 'Put panel back',
+    panoGet: 'Bring panel', panoPut: 'Panel back', langBtn: 'Türkçe', colour: 'Colour ',
+    hint: 'Mouse: drag = rotate · wheel = zoom · grab N and pull', iframe: 'For VR, open this file directly in the Quest browser from an https address.',
+    bMode: 'Change mode', bUndo: 'Undo', bHome: 'Reset model',
+    caps: ['An arc a from boundary to boundary, and the second crosscap N (the X inside it). The folded part is the crosscap ⊗, the dark ring its core. Surface: the one-holed Klein bottle.',
+      'α is the path N will follow; it crosses the core of ⊗ once. Y slides the crosscap N along α.',
+      'N crosses the core and travels through the fold, pushing a ahead of it.',
+      'The arc is pulled taut without crossing N or itself (an isotopy).',
+      'Y(a): the arc now crosses the core twice.',
+      'Apply Y once more: N makes its second trip around the core.',
+      'The arc is pulled taut again.',
+      'The yellow bridge crosses the core twice; pushing it to the other side cancels both crossings.',
+      'Now the arc does not cross the core at all.',
+      'Y² is the Dehn twist about the boundary-parallel curve ∂: Y² = t∂.'],
+    modeName: { drag: 'Slide by hand', play: 'Animation', draw: 'Draw', six: '6 colours' },
+    help: { drag: 'Grab N with the trigger or a pinch and move it over the surface. Take it once around the core and bring it home: the class of the cord is shown below.',
+      play: 'Precomputed animation. A or X: play / pause. Right stick left-right: scrub.',
+      draw: 'Hold the trigger and draw on the surface or on the disk / strip of the panel: the line appears in all three at once. Pick a colour with the round buttons.',
+      six: 'Six countries on a Möbius band, each touching all five others. Four colours suffice for every map in the plane; on the Möbius band six may be needed (Tietze, 1910). Tap a country and follow its border.' },
+    sixTitle: '6 countries', sixSel: 'The selected country has a white border: it touches each of the other five. Tap another country, or the same one to clear.',
+    waitHome: 'When N is back home (the flat region on the right), the class of the cord will appear here.', other: 'another class · ',
+    lines: n => n + (n === 1 ? ' line' : ' lines'), empty: 'empty',
+    footer: 'B / Y: mode · grip: hold and turn the model (pointing at the panel: move the panel) · right stick up-down: scale',
+    diskTitle: 'Disk + two crosscaps (⊗, N)', diskTitleSix: 'Disk + crosscap: 6 countries', stripTitle: 'Unrolled strip (ends glued with a flip)', coreLabel: 'core = the circle ⊗'
+  }
+};
+const L = LT[LANG];
+document.documentElement.lang = LANG;
+
 // ---------------------------------------------------------------- physics (worker)
 const physSrc = document.getElementById('physics-src').textContent;
 eval(physSrc);                     // defines window.YPhys for the main thread (mapping helpers)
@@ -494,16 +559,7 @@ for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
 const XY = new Int16Array(buf), F = D.frames, NF = F.length, Qz = D.Q;
 const framePts = (list) => { const out = []; for (const [st, n] of list) for (let i = 0; i < n; i++) out.push([XY[2 * (st + i)] / Qz, XY[2 * (st + i) + 1] / Qz]); return out; };
 const STATE_OF = [0, 0, 0, 1, 1, 1, 2, 2, 2, 2], STATE_TXT = ['a', 'Y(a)', 'Y²(a) = t∂(a)'];
-const CAPS = ['Kenardan kenara giden a yayı ve ikinci crosscap N (içindeki çarpı). Kıvrık bölge ⊗ crosscap\'i, koyu halka onun çekirdeği. Yüzey: tek delikli Klein şişesi.',
-  'α, N\'nin izleyeceği yol: ⊗\'nin çekirdeğini bir kez geçiyor. Y, N crosscap\'ini α boyunca kaydırır.',
-  'N çekirdeği geçip kıvrımın içinden dolaşıyor ve a\'yı önünde sürüklüyor.',
-  'Yay, N\'den ve kendisinden geçmeden gerdiriliyor (izotopi).',
-  'Y(a): yay artık çekirdeği iki kez kesiyor.',
-  'Y\'yi bir kez daha uyguluyoruz: N çekirdeğin etrafında ikinci turunu atıyor.',
-  'Yay yeniden gerdiriliyor.',
-  'Sarı köprü çekirdeği iki kez kesiyor; öbür yana itilince iki kesişim birbirini götürüyor.',
-  'Artık yay çekirdeği hiç kesmiyor.',
-  'Y², kenara paralel ∂ eğrisi etrafındaki Dehn kıvrımıdır: Y² = t∂.'];
+const CAPS = L.caps;
 
 // ---------------------------------------------------------------- 2D panels (disk + strip, info, buttons)
 function makePanel(w, h, cw, ch) {
@@ -523,9 +579,9 @@ function makeButton(id, label, dx, y, w) {
   b.mesh.position.set(-0.60 + dx * Math.cos(th) + 0.004 * Math.sin(th), y, -0.80 - dx * Math.sin(th) + 0.004 * Math.cos(th));
   b.mesh.rotation.y = th; b.mesh.userData.btn = id; return b;
 }
-const BTN = [['mode', 'Mod değiştir'], ['act', 'Oynat'], ['reset', 'Sıfırla'], ['undo', 'Geri al'], ['home', 'Modeli yerine koy']];
+const BTN = [['mode', L.bMode], ['act', L.play], ['reset', L.reset], ['undo', L.bUndo], ['home', L.bHome]];
 const buttons = BTN.map(([id, label], i) => makeButton(id, label, (i - 2) * 0.112, 1.255, 0.105));
-buttons.push(makeButton('surf', 'Yüzey: Sudanlı', -0.2225, 1.198, 0.115), makeButton('pano', 'Panoyu getir', -0.0995, 1.198, 0.115));
+buttons.push(makeButton('surf', L.surfSud, -0.2225, 1.198, 0.115), makeButton('pano', L.panoGet, -0.0995, 1.198, 0.115));
 PENS.forEach((c, k) => buttons.push(makeButton('c' + k, '', -0.009 + k * 0.0533, 1.198, 0.042)));
 function drawButton(b, text, on) {
   const { ctx, cv } = b; ctx.clearRect(0, 0, cv.width, cv.height);
@@ -547,11 +603,8 @@ function wrapText(ctx, text, x, y, w, lh) {
   for (const wd of words) { const t = line ? line + ' ' + wd : wd; if (ctx.measureText(t).width > w && line) { ctx.fillText(line, x, y); y += lh; line = wd; } else line = t; }
   if (line) ctx.fillText(line, x, y); return y + lh;
 }
-const MODE_NAME = { drag: 'Elle kaydır', play: 'Animasyon', draw: 'Çiz' };
-const MODE_HELP = {
-  drag: "N'yi tetikle ya da parmaklarını kıstırarak tut, yüzeyde gezdir. Çekirdeğin etrafında bir tur at ve evine getir: kordonun sınıfı aşağıda yazar.",
-  play: 'Hesaplanmış animasyon. A ya da X: oynat / duraklat. Sağ kol sağa-sola: ileri-geri sar.',
-  draw: 'Tetiği basılı tutup yüzeye ya da panodaki diske / şeride çiz: çizgi üç yerde birden belirir. Rengi alttaki yuvarlak düğmelerden seç.' };
+const MODE_NAME = L.modeName;
+const MODE_HELP = L.help;
 function drawInfo(stateTxt, cap) {
   const { ctx, cv } = infoP; ctx.clearRect(0, 0, cv.width, cv.height);
   ctx.fillStyle = 'rgba(14,21,20,.92)'; ctx.strokeStyle = '#2a3a37'; ctx.lineWidth = 4;
@@ -562,50 +615,138 @@ function drawInfo(stateTxt, cap) {
   ctx.font = '36px system-ui, sans-serif'; ctx.fillStyle = '#e4eeec';
   let y = wrapText(ctx, cap, 44, 240, cv.width - 88, 48);
   ctx.fillStyle = '#93a5a1'; ctx.font = '28px system-ui, sans-serif';
-  wrapText(ctx, 'B / Y: mod · kavrama: modeli tut ve çevir (panoya bakarken: panoyu taşı) · sağ kol yukarı-aşağı: büyüt / küçült', 44, cv.height - 84, cv.width - 88, 36);
+  wrapText(ctx, L.footer, 44, cv.height - 84, cv.width - 88, 36);
   infoP.tex.needsUpdate = true;
+}
+// ---------------------------------------------------------------- six countries on the Moebius band
+// RP^2 minus a small disc around a vertex of the hemi-dodecahedron is a Moebius band; its six faces touch pairwise.
+const SIX_COL = ['#e76f51', '#f4a261', '#e9c46a', '#2a9d8f', '#5b8bd0', '#9b5de5'];
+const sixRegion = (() => {
+  const g = (1 + Math.sqrt(5)) / 2;
+  const ico = [[0, 1, g], [0, -1, g], [1, g, 0], [-1, g, 0], [g, 0, 1], [-g, 0, 1]].map(v => { const n = Math.hypot(...v); return v.map(x => x / n); });
+  const pz = [1, 1, 1].map(x => x / Math.sqrt(3)), e1 = [1 / Math.SQRT2, -1 / Math.SQRT2, 0];
+  const e2 = [pz[1] * e1[2] - pz[2] * e1[1], pz[2] * e1[0] - pz[0] * e1[2], pz[0] * e1[1] - pz[1] * e1[0]];
+  const th0 = 18 * PI / 180;
+  return (eta, phi) => {     // strip coordinates: (eta, phi + 2pi) ~ (pi - eta, phi) goes to antipodal points
+    const psi = phi / 2, th = th0 + (PI - 2 * th0) * eta / PI, ct = Math.cos(th), st = Math.sin(th), cp = Math.cos(psi), sp = Math.sin(psi);
+    const q = [0, 1, 2].map(i => ct * pz[i] + st * (cp * e1[i] + sp * e2[i]));
+    let best = 0, bv = -1;
+    for (let k = 0; k < 6; k++) { const d = Math.abs(q[0] * ico[k][0] + q[1] * ico[k][1] + q[2] * ico[k][2]); if (d > bv) { bv = d; best = k; } }
+    return best;
+  };
+})();
+const SIX_RGB = SIX_COL.map(h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+function regionImage(w, h, fn) {     // fn(i, j) -> country or -1 (transparent)
+  const R = new Int8Array(w * h);
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) R[j * w + i] = fn(i, j);
+  const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
+  const c2 = cvs.getContext('2d'), img = c2.createImageData(w, h), px = img.data;
+  return { cvs, paint(sel, lw = 1) {
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const k = j * w + i, r = R[k], o = 4 * k;
+      if (r < 0) { px[o + 3] = 0; continue; }
+      let edge = false;
+      for (let d = 1; d <= lw && !edge; d++) {
+        const nb = [i >= d ? R[k - d] : -1, i < w - d ? R[k + d] : -1, j >= d ? R[k - d * w] : -1, j < h - d ? R[k + d * w] : -1];
+        edge = nb.some(x => x >= 0 && x !== r);
+      }
+      let [cr, cg, cb] = SIX_RGB[r];
+      if (sel >= 0 && r !== sel) { cr = cr * 0.4 + 14; cg = cg * 0.4 + 20; cb = cb * 0.4 + 20; }
+      if (edge) { const white = sel >= 0 && r === sel; cr = cg = cb = white ? 255 : 18; }
+      px[o] = cr; px[o + 1] = cg; px[o + 2] = cb; px[o + 3] = 255;
+    }
+    c2.putImageData(img, 0, 0); return cvs;
+  } };
+}
+let sixSel = -1, sixImgs = null, sixTex = null;
+function ensureSix() {
+  if (sixImgs) return;
+  const s = 230, W = viewP.cv.width, H = viewP.cv.height, sw = W - 44 - 570, sh = H - 44 - 96;
+  sixImgs = {
+    surf: regionImage(512, 1024, (i, j) => sixRegion((i + 0.5) / 512 * PI, (1 - (j + 0.5) / 1024) * 2 * PI)),
+    disk: regionImage(2 * s, 2 * s, (i, j) => {
+      const x = (i + 0.5 - s) / s, y = (s - j - 0.5) / s;
+      if (x * x + y * y > 1 || (x - SC.C) * (x - SC.C) + y * y < SC.R * SC.R) return -1;
+      const [e, p] = YP.toStrip(x, y); return sixRegion(e, p);
+    }),
+    strip: regionImage(sw, sh, (i, j) => sixRegion((j + 0.5) / sh * PI, (i + 0.5) / sw * 2 * PI))
+  };
+  sixTex = new THREE.CanvasTexture(sixImgs.surf.paint(-1, 2)); sixTex.colorSpace = THREE.SRGBColorSpace; sixTex.anisotropy = 4;
+  sixImgs.disk.paint(-1, 2); sixImgs.strip.paint(-1, 2);
+}
+function setSixSel(r) {
+  ensureSix(); sixSel = r;
+  sixImgs.surf.paint(r, 2); sixTex.needsUpdate = true; sixImgs.disk.paint(r, 2); sixImgs.strip.paint(r, 2);
+  dirty = true; viewsDirty = true;
 }
 // disk view and strip view of the same picture
 const SC = { C: YP.C, R: YP.R };
-function drawViews(cordPts, N, strokes, pathAlpha) {
+function drawViews(cordPts, N, strokes, pathAlpha, dAlpha, six) {
   const { ctx, cv } = viewP; const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = 'rgba(14,21,20,.92)'; ctx.strokeStyle = '#2a3a37'; ctx.lineWidth = 4;
   ctx.beginPath(); ctx.roundRect(2, 2, W - 4, H - 4, 30); ctx.fill(); ctx.stroke();
   ctx.fillStyle = '#93a5a1'; ctx.font = '500 30px system-ui, sans-serif'; ctx.textAlign = 'left';
-  ctx.fillText('Disk + iki crosscap (⊗, N)', 36, 52); ctx.fillText('Açılmış şerit (uçlar ters yapışık)', 560, 52);
+  ctx.fillText(six ? L.diskTitleSix : L.diskTitle, 36, 52); ctx.fillText(L.stripTitle, 560, 52);
   // ---- disk
   const cx = 280, cy = 330, s = 230, P = (x, y) => [cx + s * x, cy - s * y];
   ctx.fillStyle = '#5fa59c'; ctx.beginPath(); ctx.arc(cx, cy, s, 0, 2 * PI); ctx.fill();
-  const [ccx, ccy] = P(SC.C, 0);
-  const stroke2D = (pts, color, w) => {
+  if (six) ctx.drawImage(sixImgs.disk.cvs, cx - s, cy - s);
+  const [ccx, ccy] = P(SC.C, 0), rr = s * SC.R;
+  const chords = [];          // passages through the crosscap: drawn inside the glass afterwards
+  const nearSeam = q => Math.hypot(q[0] - SC.C, q[1]) < SC.R * 1.25;
+  const stroke2D = (pts, color, w, keepChords) => {
     ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
     let pen = false;
     for (let i = 0; i < pts.length; i++) {
       const [x, y] = pts[i]; const jump = i && Math.hypot(x - pts[i - 1][0], y - pts[i - 1][1]) > 0.05;
+      if (jump && keepChords && nearSeam(pts[i - 1]) && nearSeam(pts[i]))
+        chords.push([pts[Math.max(0, i - 3)], pts[i - 1], pts[i], pts[Math.min(pts.length - 1, i + 2)], color, w, ctx.globalAlpha, !!ctx.getLineDash().length]);
       const [X, Y] = P(x, y); if (!pen || jump) ctx.moveTo(X, Y); else ctx.lineTo(X, Y); pen = true;
     }
     ctx.stroke();
   };
-  if (pathAlpha > 0.01) { ctx.globalAlpha = pathAlpha; ctx.setLineDash([12, 9]); stroke2D(D.legA, '#ff8a5b', 4); stroke2D(D.legB, '#ff8a5b', 4); ctx.setLineDash([]); ctx.globalAlpha = 1; }
-  if (cordPts) stroke2D(cordPts, '#9aa2ff', 5);
-  for (const st of strokes) stroke2D(st.pts.map(([e, p]) => YP.fromStrip(e, p)), st.col, 5);
+  if (dAlpha > 0.01) { ctx.globalAlpha = dAlpha; ctx.strokeStyle = '#74d4ba'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, s * 0.935, 0, 2 * PI); ctx.stroke(); ctx.globalAlpha = 1; }
+  if (pathAlpha > 0.01) { ctx.globalAlpha = pathAlpha; ctx.setLineDash([12, 9]); stroke2D(D.legA.concat(D.legB), '#ff8a5b', 4, true); ctx.setLineDash([]); ctx.globalAlpha = 1; }
+  if (cordPts) stroke2D(cordPts, '#9aa2ff', 5, true);
+  for (const st of strokes) stroke2D(st.pts.map(([e, p]) => YP.fromStrip(e, p)), st.col, 5, true);
+  let nRaw = null;
   if (N) {
     const ca = Math.cos(N.a), sa = Math.sin(N.a);
-    const T = (u, v) => { if (N.flip) v = -v; let q = [N.p[0] + ca * u - sa * v, N.p[1] + sa * u + ca * v]; const dx = q[0] - SC.C; if (dx * dx + q[1] * q[1] < SC.R * SC.R) q = YP.sigma(q[0], q[1]); return q; };
+    const T0 = (u, v) => { if (N.flip) v = -v; return [N.p[0] + ca * u - sa * v, N.p[1] + sa * u + ca * v]; };
+    const T = (u, v) => { let q = T0(u, v); const dx = q[0] - SC.C; if (dx * dx + q[1] * q[1] < SC.R * SC.R) q = YP.sigma(q[0], q[1]); return q; };
     const circ = []; for (let k = 0; k <= 40; k++) { const t = 2 * PI * k / 40; circ.push(T(RHO * Math.cos(t), RHO * Math.sin(t))); }
     stroke2D(circ, '#ff6a3d', 4); stroke2D(letter2.map(([u, v]) => T(u, v)), '#ff6a3d', 4);
-    ctx.globalAlpha = 0.5; for (const L of xMark2) stroke2D(L.map(([u, v]) => T(u, v)), '#ff6a3d', 2.5); ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.5; for (const Lx of xMark2) stroke2D(Lx.map(([u, v]) => T(u, v)), '#ff6a3d', 2.5); ctx.globalAlpha = 1;
+    if (Math.hypot(N.p[0] - SC.C, N.p[1]) < SC.R + RHO) nRaw = { T0 };
   }
-  ctx.fillStyle = 'rgba(242,246,245,.55)'; ctx.beginPath(); ctx.arc(ccx, ccy, s * SC.R, 0, 2 * PI); ctx.fill();
-  ctx.strokeStyle = '#0b1110'; ctx.lineWidth = 4; ctx.stroke();
-  ctx.strokeStyle = 'rgba(11,17,16,.35)'; ctx.lineWidth = 3; const kk = s * SC.R * 0.5;
+  // ---- the crosscap as glass: what passes through it stays visible
+  ctx.fillStyle = 'rgba(242,246,245,.22)'; ctx.beginPath(); ctx.arc(ccx, ccy, rr, 0, 2 * PI); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(ccx, ccy, rr, 0, 2 * PI); ctx.clip();
+  ctx.strokeStyle = 'rgba(11,17,16,.28)'; ctx.lineWidth = 3; const kk = rr * 0.5;
   ctx.beginPath(); ctx.moveTo(ccx - kk, ccy - kk); ctx.lineTo(ccx + kk, ccy + kk); ctx.moveTo(ccx - kk, ccy + kk); ctx.lineTo(ccx + kk, ccy - kk); ctx.stroke();
+  for (const [q0, q1, q2, q3, col, w, al, dashed] of chords) {
+    let ti = [q1[0] - q0[0], q1[1] - q0[1]], to = [q3[0] - q2[0], q3[1] - q2[1]];
+    const ni = Math.hypot(...ti) || 1, no = Math.hypot(...to) || 1; ti = ti.map(x => x / ni); to = to.map(x => x / no);
+    const Lc = 0.55 * SC.R;
+    const A = P(q1[0], q1[1]), B = P(q1[0] + Lc * ti[0], q1[1] + Lc * ti[1]), Cc = P(q2[0] - Lc * to[0], q2[1] - Lc * to[1]), Dd = P(q2[0], q2[1]);
+    ctx.globalAlpha = 0.5 * (al || 1); ctx.strokeStyle = col; ctx.lineWidth = w * 0.85; if (dashed) ctx.setLineDash([10, 8]);
+    ctx.beginPath(); ctx.moveTo(...A); ctx.bezierCurveTo(...B, ...Cc, ...Dd); ctx.stroke(); ctx.setLineDash([]);
+  }
+  if (nRaw) {               // N seen through the glass while it passes
+    const circ = []; for (let k = 0; k <= 40; k++) { const t = 2 * PI * k / 40; circ.push(nRaw.T0(RHO * Math.cos(t), RHO * Math.sin(t))); }
+    ctx.globalAlpha = 0.45; ctx.strokeStyle = '#ff6a3d'; ctx.lineWidth = 3.5; ctx.beginPath();
+    circ.forEach(([x, y], i) => { const [X, Y] = P(x, y); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }); ctx.stroke();
+    ctx.beginPath(); letter2.forEach(([u, v], i) => { const [X, Y] = P(...nRaw.T0(u, v)); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }); ctx.stroke();
+  }
+  ctx.globalAlpha = 1; ctx.restore();
+  ctx.strokeStyle = '#0b1110'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(ccx, ccy, rr, 0, 2 * PI); ctx.stroke();
   ctx.strokeStyle = '#dfe9e6'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(cx, cy, s, 0, 2 * PI); ctx.stroke();
   // ---- strip: phi left -> right, eta top (rim) -> bottom (rim), core in the middle
   const x0 = 570, x1 = W - 44, y0 = 96, y1 = H - 44, ym = (y0 + y1) / 2;
   const Sx = (e, p) => [x0 + (p / (2 * PI)) * (x1 - x0), y0 + (e / PI) * (y1 - y0)];
   ctx.fillStyle = '#5fa59c'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+  if (six) ctx.drawImage(sixImgs.strip.cvs, x0, y0);
   ctx.strokeStyle = '#dfe9e6'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); ctx.moveTo(x0, y1); ctx.lineTo(x1, y1); ctx.stroke();
   ctx.strokeStyle = '#0b1110'; ctx.lineWidth = 4; ctx.setLineDash([14, 10]); ctx.beginPath(); ctx.moveTo(x0, ym); ctx.lineTo(x1, ym); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle = '#e4eeec';
@@ -619,6 +760,7 @@ function drawViews(cordPts, N, strokes, pathAlpha) {
     ctx.stroke();
   };
   ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
+  if (dAlpha > 0.01) { ctx.globalAlpha = dAlpha; const dd = []; for (let j = 0; j <= 240; j++) { const t = 2 * PI * j / 240; dd.push([0.935 * Math.cos(t), 0.935 * Math.sin(t)]); } stripLine(dd, '#74d4ba', 4); ctx.globalAlpha = 1; }
   if (pathAlpha > 0.01) { ctx.globalAlpha = pathAlpha; ctx.setLineDash([12, 9]); stripLine(densify(D.legA.concat(D.legB), 0.01), '#ff8a5b', 4); ctx.setLineDash([]); ctx.globalAlpha = 1; }
   if (cordPts) stripLine(densify(cordPts, 0.01), '#9aa2ff', 5);
   for (const st of strokes) stripLine(st.pts, st.col, 5, true);
@@ -627,11 +769,11 @@ function drawViews(cordPts, N, strokes, pathAlpha) {
     const T = (u, v) => { if (N.flip) v = -v; return [N.p[0] + ca * u - sa * v, N.p[1] + sa * u + ca * v]; };
     const circ = []; for (let k = 0; k <= 40; k++) { const t = 2 * PI * k / 40; circ.push(T(RHO * Math.cos(t), RHO * Math.sin(t))); }
     stripLine(circ, '#ff6a3d', 4); stripLine(letter2.map(([u, v]) => T(u, v)), '#ff6a3d', 4);
-    ctx.globalAlpha = 0.5; for (const L of xMark2) stripLine(L.map(([u, v]) => T(u, v)), '#ff6a3d', 2.5); ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.5; for (const Lx of xMark2) stripLine(Lx.map(([u, v]) => T(u, v)), '#ff6a3d', 2.5); ctx.globalAlpha = 1;
   }
   ctx.restore();
   ctx.fillStyle = '#93a5a1'; ctx.font = '24px system-ui, sans-serif';
-  ctx.fillText('çekirdek = ⊗ çemberi', x0 + 12, ym - 12);
+  ctx.fillText(L.coreLabel, x0 + 12, ym - 12);
   viewP.tex.needsUpdate = true;
 }
 
@@ -639,32 +781,40 @@ function drawViews(cordPts, N, strokes, pathAlpha) {
 let mode = 'drag', playing = false, cur = 0, speed = 1, lastT = performance.now();
 const strokes = []; let curStroke = null;
 const ui = { state: document.getElementById('state'), help: document.getElementById('modeHelp'), act: document.getElementById('bAct'),
-  undo: document.getElementById('bUndo'), modes: { drag: document.getElementById('mDrag'), play: document.getElementById('mPlay'), draw: document.getElementById('mDraw') } };
+  undo: document.getElementById('bUndo'), modes: { drag: document.getElementById('mDrag'), play: document.getElementById('mPlay'), draw: document.getElementById('mDraw'), six: document.getElementById('mSix') } };
 function setMode(m) {
   mode = m; playing = false; worker.postMessage({ t: 'release' }); grab = null;
   for (const k in ui.modes) ui.modes[k].setAttribute('aria-pressed', k === m ? 'true' : 'false');
   ui.help.textContent = MODE_HELP[m];
   ui.act.hidden = m !== 'play'; ui.undo.hidden = m !== 'draw';
-  const showCord = m !== 'draw'; cordR.visible(showCord); nDisk.visible = showCord; nLineR.visible(showCord); nXR.visible(showCord); hlR.visible(m === 'play');
-  strokeR.visible(m === 'draw'); alphaR.visible(m !== 'draw'); dR.visible(m === 'play');
-  dirty = true;
+  const showCord = m === 'drag' || m === 'play'; cordR.visible(showCord); nDisk.visible = showCord; nLineR.visible(showCord); nXR.visible(showCord); hlR.visible(m === 'play');
+  strokeR.visible(m === 'draw'); alphaR.visible(showCord); dR.visible(m === 'play');
+  if (m === 'six') { ensureSix(); surfMat.map = sixTex; surfMat.color.set('#ffffff'); surfMat.opacity = 0.9; }
+  else { surfMat.map = null; surfMat.color.set('#5fa59c'); surfMat.opacity = 0.72; }
+  surfMat.needsUpdate = true;
+  dirty = true; viewsDirty = true;
 }
-const nextMode = () => setMode(mode === 'drag' ? 'play' : mode === 'play' ? 'draw' : 'drag');
+const nextMode = () => setMode(mode === 'drag' ? 'play' : mode === 'play' ? 'draw' : mode === 'draw' ? 'six' : 'drag');
 function act() { if (mode === 'play') { if (!playing && Math.round(cur) >= NF - 1) cur = 0; playing = !playing; dirty = true; } }
-function resetAll() { if (mode === 'drag') worker.postMessage({ t: 'reset' }); else if (mode === 'draw') strokes.length = 0; else { cur = 0; playing = false; } dirty = true; }
+function resetAll() { if (mode === 'drag') worker.postMessage({ t: 'reset' }); else if (mode === 'draw') strokes.length = 0; else if (mode === 'six') setSixSel(-1); else { cur = 0; playing = false; } dirty = true; }
 function undo() { if (mode === 'draw') { strokes.pop(); dirty = true; } }
-ui.modes.drag.onclick = () => setMode('drag'); ui.modes.play.onclick = () => setMode('play'); ui.modes.draw.onclick = () => setMode('draw');
+ui.modes.drag.onclick = () => setMode('drag'); ui.modes.play.onclick = () => setMode('play'); ui.modes.draw.onclick = () => setMode('draw'); ui.modes.six.onclick = () => setMode('six');
+// static texts in the chosen language
+for (const [id, key] of [['mDrag', 'mDrag'], ['mPlay', 'mPlay'], ['mDraw', 'mDraw'], ['mSix', 'mSix'], ['bAct', 'play'], ['bReset', 'reset'], ['bUndo', 'undoLong'], ['bSurf', 'surfSud'], ['bPano', 'panoNear'], ['bLang', 'langBtn'], ['hint', 'hint']])
+  document.getElementById(id).textContent = L[key];
+document.getElementById('nNote').innerHTML = L.note;
+document.getElementById('bLang').onclick = () => { const u = new URL(location.href); u.searchParams.set('lang', LANG === 'tr' ? 'en' : 'tr'); location.href = u.toString(); };
 ui.act.onclick = act; document.getElementById('bReset').onclick = resetAll; ui.undo.onclick = undo;
 // pen colours
 const palEl = document.getElementById('palette');
 function setPen(k) { pen = k; [...palEl.children].forEach((b, j) => b.setAttribute('aria-pressed', j === k ? 'true' : 'false')); if (mode !== 'draw') setMode('draw'); dirty = true; }
-PENS.forEach((c, k) => { const b = document.createElement('button'); b.type = 'button'; b.style.background = c; b.setAttribute('aria-label', 'Renk ' + (k + 1)); b.onclick = () => setPen(k); palEl.appendChild(b); });
+PENS.forEach((c, k) => { const b = document.createElement('button'); b.type = 'button'; b.style.background = c; b.setAttribute('aria-label', L.colour + (k + 1)); b.onclick = () => setPen(k); palEl.appendChild(b); });
 [...palEl.children].forEach((b, j) => b.setAttribute('aria-pressed', j === pen ? 'true' : 'false'));
 // surface: Sudanese band or ordinary Moebius band (same strip coordinates, same physics)
 function setSurface(kind) {
   surfKind = kind; fillSurface(); sg.attributes.position.needsUpdate = true; sg.computeVertexNormals(); sg.computeBoundingSphere(); sg.computeBoundingBox();
   buildRimCore(); buildFixedCurves(); liveDirty = true; lastDrawn = -1; dirty = true; viewsDirty = true;
-  document.getElementById('bSurf').textContent = 'Yüzey: ' + (kind === 'sud' ? 'Sudanlı' : 'sıradan Möbius');
+  document.getElementById('bSurf').textContent = kind === 'sud' ? L.surfSud : L.surfMob;
 }
 const toggleSurface = () => setSurface(surfKind === 'sud' ? 'mob' : 'sud');
 document.getElementById('bSurf').onclick = toggleSurface;
@@ -682,7 +832,7 @@ function placePanel(near) {
     viewP.mesh.position.copy(cp).addScaledVector(fwd, 0.42).addScaledVector(right, 0.22).add(new THREE.Vector3(0, -0.2, 0));
     viewP.mesh.lookAt(cp);
   } else { viewP.mesh.position.copy(panelHome.pos); viewP.mesh.rotation.set(0, panelHome.rotY, 0); }
-  document.getElementById('bPano').textContent = near ? 'Panoyu yerine koy' : 'Panoyu yaklaştır';
+  document.getElementById('bPano').textContent = near ? L.panoBack : L.panoNear;
   dirty = true;
 }
 document.getElementById('bPano').onclick = () => placePanel(!panelNear);
@@ -725,6 +875,12 @@ let grab = null;              // {src, kind: 'N' | 'draw'}
 function beginAction(src, origin, dir) {
   const b = hitButton(origin, dir); if (b) { pressButton(b); return; }
   if (mode === 'drag' && rayNearN(origin, dir) < 0.03 * Math.max(1, modelRoot.scale.x / home.scale)) grab = { src, kind: 'N' };
+  else if (mode === 'six') {
+    const hp = hitPanel(origin, dir), hs = hitSurface(origin, dir);
+    const ds = hs ? hs.point.distanceTo(origin) : Infinity;
+    const q = hp && hp.dist < ds ? hp.st : hs ? [hs.eta, hs.phi] : null;
+    if (q) { const r = sixRegion(q[0], q[1]); setSixSel(sixSel === r ? -1 : r); }
+  }
   else if (mode === 'draw') {
     const hp = hitPanel(origin, dir), hs = hitSurface(origin, dir);
     const ds = hs ? hs.point.distanceTo(origin) : Infinity;
@@ -771,7 +927,7 @@ for (let i = 0; i < 2; i++) {
     else { c.attach(modelRoot); st.holding = true; }
   });
   c.addEventListener('squeezeend', () => {
-    if (st.holdingPanel) { scene.attach(viewP.mesh); st.holdingPanel = false; document.getElementById('bPano').textContent = 'Panoyu yerine koy'; dirty = true; }
+    if (st.holdingPanel) { scene.attach(viewP.mesh); st.holdingPanel = false; document.getElementById('bPano').textContent = L.panoBack; dirty = true; }
     if (st.holding) { scene.attach(modelRoot); st.holding = false; }
   });
   xrSrc.push(st);
@@ -799,26 +955,28 @@ function update(t) {
   const dt = Math.min(0.1, (t - lastT) / 1000); lastT = t;
   if (renderer.xr.isPresenting) pollGamepads(dt);
   for (const st of xrSrc) if (grab && grab.src === st) { const [o, d] = ctrlRay(st.c); moveAction(o, d); }
-  let stateTxt = '', cap = MODE_HELP[mode], cordPts = null, N = null, pathA = 0;
+  let stateTxt = '', cap = MODE_HELP[mode], cordPts = null, N = null, pathA = 0, dA = 0;
   if (mode === 'play') {
     if (playing) { cur += dt * 30 * speed; if (cur >= NF - 1) { cur = NF - 1; playing = false; } }
     const f = F[Math.round(cur)];
-    cordPts = framePts(f.pc); N = { p: f.p, a: f.a, flip: !!f.fl }; pathA = f.al;
+    cordPts = framePts(f.pc); N = { p: f.p, a: f.a, flip: !!f.fl }; pathA = f.al; dA = f.dc;
     stateTxt = STATE_TXT[STATE_OF[f.ph]]; cap = CAPS[f.ph];
     if (Math.round(cur) !== lastDrawn || dirty) {
       cordR.set([cord3(cordPts)]); setN(f.p, f.a, !!f.fl);
       hlR.set(f.hl > 0.01 ? f.hp.map(h => cord3(framePts([h]))) : []);
-      alphaR.set(f.al > 0.01 ? [alpha3] : [], 3); dR.set(f.dc > 0.01 ? [dCurve3] : [], 4);
+      alphaR.set(f.al > 0.01 ? [alpha3] : [], 3); dR.set(f.dc > 0.01 ? [dCurve3] : [], 0);
       lastDrawn = Math.round(cur); viewsDirty = true;
     }
-    ui.act.textContent = playing ? 'Duraklat' : 'Oynat';
+    ui.act.textContent = playing ? L.pause : L.play;
   } else if (mode === 'drag') {
     cordPts = []; for (let i = 0; i < live.xs.length; i++) cordPts.push([live.xs[i], live.ys[i]]);
     const ang = Math.atan2(live.a[1], live.a[0]); N = { p: live.p, a: ang, flip: live.flip };
     if (liveDirty) { cordR.set([cord3(cordPts)]); setN(live.p, ang, live.flip); alphaR.set([alpha3], 3); liveDirty = false; viewsDirty = true; }
-    if (live.word !== null && live.word !== undefined) liveLabel = YP.WORDS[live.word] || ('başka bir sınıf · ' + live.word);
+    if (live.word !== null && live.word !== undefined) liveLabel = YP.WORDS[live.word] || (L.other + live.word);
     stateTxt = live.word === null ? '…' : liveLabel;
-    cap = live.word === null ? "N evine (sağdaki düz bölge) dönünce kordonun sınıfı burada yazacak." : MODE_HELP.drag;
+    cap = live.word === null ? L.waitHome : MODE_HELP.drag;
+  } else if (mode === 'six') {
+    stateTxt = L.sixTitle; cap = sixSel >= 0 ? L.sixSel : MODE_HELP.six;
   } else {
     if (dirty) {
       const lines = [], cols = [];
@@ -830,10 +988,11 @@ function update(t) {
       }
       strokeR.set(lines, 0, cols);
     }
-    stateTxt = strokes.length ? strokes.length + ' çizgi' : 'boş';
+    stateTxt = strokes.length ? L.lines(strokes.length) : L.empty;
   }
   if ((viewsDirty || dirty) && t - lastPanel > 100) {
-    drawViews(mode === 'draw' ? null : cordPts, mode === 'draw' ? null : N, mode === 'draw' ? strokes : [], mode === 'play' ? pathA : 0);
+    const showC = mode === 'drag' || mode === 'play';
+    drawViews(showC ? cordPts : null, showC ? N : null, mode === 'draw' ? strokes : [], mode === 'play' ? pathA : 0, mode === 'play' ? dA : 0, mode === 'six');
     lastPanel = t; viewsDirty = false;
   }
   const infoKey = mode + '|' + stateTxt + '|' + cap;
@@ -841,7 +1000,7 @@ function update(t) {
   const btnKey = playing + '|' + pen + '|' + surfKind + '|' + panelNear;
   if (btnKey !== lastBtn) {
     for (const b of buttons) {
-      const txt = b.id === 'act' ? (playing ? 'Duraklat' : 'Oynat') : b.id === 'surf' ? (surfKind === 'sud' ? 'Yüzey: Sudanlı' : 'Yüzey: sıradan') : b.id === 'pano' ? (panelNear ? 'Panoyu geri koy' : 'Panoyu getir') : b.label;
+      const txt = b.id === 'act' ? (playing ? L.pause : L.play) : b.id === 'surf' ? (surfKind === 'sud' ? L.surfSud : L.surfMobShort) : b.id === 'pano' ? (panelNear ? L.panoPut : L.panoGet) : b.label;
       drawButton(b, txt, false);
     }
     lastBtn = btnKey;
@@ -858,10 +1017,10 @@ setVrPanels(false);
 renderer.xr.addEventListener('sessionstart', () => { setVrPanels(true); placePanel(false); });
 renderer.xr.addEventListener('sessionend', () => setVrPanels(false));
 // inside an embedded frame (e.g. a preview) the headset cannot enter VR: say how instead
-if (window.top !== window) document.getElementById('vrslot').innerHTML = '<p style="margin:0">VR için bu dosyayı Quest tarayıcısında doğrudan, https adresinden aç.</p>';
+if (window.top !== window) document.getElementById('vrslot').innerHTML = '<p style="margin:0">' + L.iframe + '</p>';
 setMode('drag');
 window.__vr = { setMode, worker, get live() { return live; }, YP, beginAction, moveAction, endAction, hitSurface, hitPanel, camera, modelRoot, nCenter3, surface,
-  setVrPanels, buttons, placePanel, setSurface, setPen, strokes, viewP, controls, pressButton };
+  setVrPanels, buttons, placePanel, setSurface, setPen, strokes, viewP, controls, pressButton, setSixSel, LANG, setCur: k => { cur = k; playing = false; dirty = true; }, NF };
 </script>
 </body>
 </html>
