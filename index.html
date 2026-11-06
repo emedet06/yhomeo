@@ -51,6 +51,7 @@
   <div class="row">
     <button id="bSurf" type="button">Yüzey: Sudanlı</button>
     <button id="bPano" type="button">Panoyu yaklaştır</button>
+    <button id="bGlass" type="button" aria-pressed="true">Cam crosscap</button>
     <button id="bLang" type="button">English</button>
   </div>
   <div id="vrslot"></div>
@@ -311,7 +312,7 @@ const LT = {
     note: "<i>N</i> ikinci crosscap (içindeki çarpı): yüzey tek delikli Klein şişesi, kaydırma da <i>Y</i>-homeomorfizması. Yay <i>N</i>'nin içine hiç girmediği için onu bir disk gibi önünde itiyor.",
     mDrag: 'Elle kaydır', mPlay: 'Animasyon', mDraw: 'Çiz', mSix: '6 renk', play: 'Oynat', pause: 'Duraklat', reset: 'Sıfırla', undoLong: 'Son çizgiyi sil',
     surfSud: 'Yüzey: Sudanlı', surfMob: 'Yüzey: sıradan Möbius', surfMobShort: 'Yüzey: sıradan', panoNear: 'Panoyu yaklaştır', panoBack: 'Panoyu yerine koy',
-    panoGet: 'Panoyu getir', panoPut: 'Panoyu geri koy', langBtn: 'English', colour: 'Renk ',
+    panoGet: 'Panoyu getir', panoPut: 'Panoyu geri koy', langBtn: 'English', colour: 'Renk ', glass: 'Cam crosscap',
     hint: "Fare: sürükle = döndür · tekerlek = yakınlaştır · N'yi tutup çek", iframe: 'VR için bu dosyayı Quest tarayıcısında doğrudan, https adresinden aç.',
     bMode: 'Mod değiştir', bUndo: 'Geri al', bHome: 'Modeli yerine koy',
     caps: ['Kenardan kenara giden a yayı ve ikinci crosscap N (içindeki çarpı). Kıvrık bölge ⊗ crosscap\'i, koyu halka onun çekirdeği. Yüzey: tek delikli Klein şişesi.',
@@ -339,7 +340,7 @@ const LT = {
     note: "<i>N</i> is the second crosscap (the X inside it): the surface is the one-holed Klein bottle and the slide is the <i>Y</i>-homeomorphism. The arc never enters <i>N</i>, so it pushes <i>N</i> along like a disk.",
     mDrag: 'Slide by hand', mPlay: 'Animation', mDraw: 'Draw', mSix: '6 colours', play: 'Play', pause: 'Pause', reset: 'Reset', undoLong: 'Undo last line',
     surfSud: 'Surface: Sudanese', surfMob: 'Surface: ordinary Möbius', surfMobShort: 'Surface: ordinary', panoNear: 'Bring panel closer', panoBack: 'Put panel back',
-    panoGet: 'Bring panel', panoPut: 'Panel back', langBtn: 'Türkçe', colour: 'Colour ',
+    panoGet: 'Bring panel', panoPut: 'Panel back', langBtn: 'Türkçe', colour: 'Colour ', glass: 'Glass crosscap',
     hint: 'Mouse: drag = rotate · wheel = zoom · grab N and pull', iframe: 'For VR, open this file directly in the Quest browser from an https address.',
     bMode: 'Change mode', bUndo: 'Undo', bHome: 'Reset model',
     caps: ['An arc a from boundary to boundary, and the second crosscap N (the X inside it). The folded part is the crosscap ⊗, the dark ring its core. Surface: the one-holed Klein bottle.',
@@ -411,11 +412,17 @@ function mob(eta, phi, out) {
 let surfKind = 'sud';
 const emb = (e, p, out) => (surfKind === 'sud' ? sud(e, p, out) : mob(e, p, out));
 const map2d = (x, y, out) => { const [e, p] = YP.toStrip(x, y); return emb(e, p, out); };
+// a chart jump across the crosscap seam: two points next to the circle, on opposite sides of it
+// (simplified polylines also have long straight segments, which must be drawn and subdivided)
+function seamJump(q, p) {
+  const ax = q[0] - YP.C, ay = q[1], bx = p[0] - YP.C, by = p[1], lim = 1.3 * YP.R;
+  return Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.05 && Math.hypot(ax, ay) < lim && Math.hypot(bx, by) < lim && ax * bx + ay * by < 0;
+}
 function densify(pts, step) {           // 2D points; never interpolate across a seam jump
   const out = [];
   for (let i = 0; i < pts.length; i++) {
     if (i) { const q = pts[i - 1], p = pts[i], L = Math.hypot(p[0] - q[0], p[1] - q[1]);
-      if (L < 0.05) { const n = Math.ceil(L / step); for (let k = 1; k < n; k++) out.push([q[0] + (p[0] - q[0]) * k / n, q[1] + (p[1] - q[1]) * k / n]); } }
+      if (!seamJump(q, p)) { const n = Math.ceil(L / step); for (let k = 1; k < n; k++) out.push([q[0] + (p[0] - q[0]) * k / n, q[1] + (p[1] - q[1]) * k / n]); } }
     out.push(pts[i]);
   }
   return out;
@@ -466,7 +473,21 @@ for (let i = 0; i < NE - 1; i++) for (let j = 0; j < NP - 1; j++) { const a = i 
 const sg = new THREE.BufferGeometry();
 sg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); sg.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 sg.setIndex(idx); sg.computeVertexNormals();
-const surfMat = new THREE.MeshStandardMaterial({ color: '#5fa59c', roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthWrite: false });
+const surfMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6, side: THREE.DoubleSide, transparent: true, opacity: 0.72, depthWrite: false, vertexColors: true });
+// glass crosscap: the band turns clear and pale near its core, so what passes through the fold stays visible
+const vcol = new Float32Array(NE * NP * 4); sg.setAttribute('color', new THREE.BufferAttribute(vcol, 4));
+let glassOn = true;
+function paintSurface(six) {
+  const base = new THREE.Color('#5fa59c'), glass = new THREE.Color('#e6f4f1');
+  for (let i = 0; i < NE; i++) {
+    const d = Math.abs(PI * i / (NE - 1) - PI / 2), t = Math.max(0, 1 - d / 0.55), g = glassOn ? t * t * (3 - 2 * t) : 0;
+    const r = six ? 1 : base.r + (glass.r - base.r) * g, gg = six ? 1 : base.g + (glass.g - base.g) * g, bb = six ? 1 : base.b + (glass.b - base.b) * g;
+    const al = six ? 1 - 0.55 * g : 1 - 0.72 * g;
+    for (let j = 0; j < NP; j++) vcol.set([r, gg, bb, al], 4 * (i * NP + j));
+  }
+  sg.attributes.color.needsUpdate = true;
+}
+paintSurface(false);
 const surface = new THREE.Mesh(sg, surfMat); surface.renderOrder = 5; modelRoot.add(surface);
 function tubeLoop(pts, r, color) {
   return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true, 'centripetal'), pts.length, r, 8, true),
@@ -699,7 +720,7 @@ function drawViews(cordPts, N, strokes, pathAlpha, dAlpha, six) {
     ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
     let pen = false;
     for (let i = 0; i < pts.length; i++) {
-      const [x, y] = pts[i]; const jump = i && Math.hypot(x - pts[i - 1][0], y - pts[i - 1][1]) > 0.05;
+      const [x, y] = pts[i]; const jump = i && seamJump(pts[i - 1], pts[i]);
       if (jump && keepChords && nearSeam(pts[i - 1]) && nearSeam(pts[i]))
         chords.push([pts[Math.max(0, i - 3)], pts[i - 1], pts[i], pts[Math.min(pts.length - 1, i + 2)], color, w, ctx.globalAlpha, !!ctx.getLineDash().length]);
       const [X, Y] = P(x, y); if (!pen || jump) ctx.moveTo(X, Y); else ctx.lineTo(X, Y); pen = true;
@@ -789,8 +810,9 @@ function setMode(m) {
   ui.act.hidden = m !== 'play'; ui.undo.hidden = m !== 'draw';
   const showCord = m === 'drag' || m === 'play'; cordR.visible(showCord); nDisk.visible = showCord; nLineR.visible(showCord); nXR.visible(showCord); hlR.visible(m === 'play');
   strokeR.visible(m === 'draw'); alphaR.visible(showCord); dR.visible(m === 'play');
-  if (m === 'six') { ensureSix(); surfMat.map = sixTex; surfMat.color.set('#ffffff'); surfMat.opacity = 0.9; }
-  else { surfMat.map = null; surfMat.color.set('#5fa59c'); surfMat.opacity = 0.72; }
+  if (m === 'six') { ensureSix(); surfMat.map = sixTex; surfMat.opacity = 0.9; }
+  else { surfMat.map = null; surfMat.opacity = 0.72; }
+  paintSurface(m === 'six');
   surfMat.needsUpdate = true;
   dirty = true; viewsDirty = true;
 }
@@ -800,9 +822,10 @@ function resetAll() { if (mode === 'drag') worker.postMessage({ t: 'reset' }); e
 function undo() { if (mode === 'draw') { strokes.pop(); dirty = true; } }
 ui.modes.drag.onclick = () => setMode('drag'); ui.modes.play.onclick = () => setMode('play'); ui.modes.draw.onclick = () => setMode('draw'); ui.modes.six.onclick = () => setMode('six');
 // static texts in the chosen language
-for (const [id, key] of [['mDrag', 'mDrag'], ['mPlay', 'mPlay'], ['mDraw', 'mDraw'], ['mSix', 'mSix'], ['bAct', 'play'], ['bReset', 'reset'], ['bUndo', 'undoLong'], ['bSurf', 'surfSud'], ['bPano', 'panoNear'], ['bLang', 'langBtn'], ['hint', 'hint']])
+for (const [id, key] of [['mDrag', 'mDrag'], ['mPlay', 'mPlay'], ['mDraw', 'mDraw'], ['mSix', 'mSix'], ['bAct', 'play'], ['bReset', 'reset'], ['bUndo', 'undoLong'], ['bSurf', 'surfSud'], ['bPano', 'panoNear'], ['bLang', 'langBtn'], ['bGlass', 'glass'], ['hint', 'hint']])
   document.getElementById(id).textContent = L[key];
 document.getElementById('nNote').innerHTML = L.note;
+document.getElementById('bGlass').onclick = e => { glassOn = !glassOn; e.currentTarget.setAttribute('aria-pressed', String(glassOn)); paintSurface(mode === 'six'); };
 document.getElementById('bLang').onclick = () => { const u = new URL(location.href); u.searchParams.set('lang', LANG === 'tr' ? 'en' : 'tr'); location.href = u.toString(); };
 ui.act.onclick = act; document.getElementById('bReset').onclick = resetAll; ui.undo.onclick = undo;
 // pen colours
